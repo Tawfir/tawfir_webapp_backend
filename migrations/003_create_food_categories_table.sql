@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS food_categories (
 CREATE INDEX IF NOT EXISTS idx_food_categories_slug ON food_categories(slug);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_food_categories_updated_at ON food_categories;
 CREATE TRIGGER update_food_categories_updated_at BEFORE UPDATE ON food_categories
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

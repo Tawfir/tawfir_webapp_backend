@@ -15,6 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_notifiable ON notifications(notifia
 CREATE INDEX IF NOT EXISTS idx_notifications_read_at ON notifications(read_at);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_notifications_updated_at ON notifications;
 CREATE TRIGGER update_notifications_updated_at BEFORE UPDATE ON notifications
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

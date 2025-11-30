@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { restaurantApproved } from '../middleware/restaurantApproved';
-// Controllers will be imported here
-// import { RestaurantController } from '../controllers/restaurantController';
+import { RestaurantController } from '../controllers/restaurantController';
+import { RestaurantDishController } from '../controllers/restaurantDishController';
+import { RestaurantOrderController } from '../controllers/restaurantOrderController';
+import { RestaurantWalletController } from '../controllers/restaurantWalletController';
+import { RestaurantWithdrawalController } from '../controllers/restaurantWithdrawalController';
+import { RestaurantTransactionController } from '../controllers/restaurantTransactionController';
 
 const router = Router();
 
@@ -10,31 +14,31 @@ const router = Router();
 router.use(authenticate);
 
 // Restaurant management (no approval needed)
-// router.post('/', RestaurantController.create);
-// router.get('/:id?', RestaurantController.get);
-// router.put('/', RestaurantController.update);
+router.post('/', RestaurantController.create);
+router.get('/:id?', RestaurantController.get);
+router.put('/', RestaurantController.update);
 
 // Routes below require restaurant approval
 router.use(restaurantApproved);
 
 // Wallet routes
-// router.get('/wallet', RestaurantController.getWalletBalance);
-// router.get('/wallet/transactions', RestaurantController.getWalletTransactions);
-// router.post('/wallet/withdrawals', RestaurantController.requestWithdrawal);
+router.get('/wallet', RestaurantWalletController.balance);
+router.get('/wallet/transactions', RestaurantWalletController.transactions);
+router.post('/wallet/withdrawals', RestaurantWithdrawalController.store);
 
 // Dish routes
-// router.get('/dishes', RestaurantController.getDishes);
-// router.post('/dishes', RestaurantController.createDish);
-// router.put('/dishes/:id', RestaurantController.updateDish);
-// router.delete('/dishes/:id', RestaurantController.deleteDish);
+router.get('/dishes', RestaurantDishController.index);
+router.post('/dishes', RestaurantDishController.store);
+router.put('/dishes/:id', RestaurantDishController.update);
+router.delete('/dishes/:id', RestaurantDishController.destroy);
 
 // Order routes
-// router.get('/orders', RestaurantController.getOrders);
-// router.get('/orders/:id', RestaurantController.getOrderDetails);
-// router.put('/orders/:id/status', RestaurantController.updateOrderStatus);
+router.get('/orders', RestaurantOrderController.index);
+router.get('/orders/:id', RestaurantOrderController.show);
+router.put('/orders/:id/status', RestaurantOrderController.updateStatus);
 
 // Transaction routes
-// router.patch('/transactions/:id/paid', RestaurantController.markTransactionPaid);
+router.patch('/transactions/:id/paid', RestaurantTransactionController.markPaid);
 
 export default router;
 

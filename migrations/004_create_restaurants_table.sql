@@ -31,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_restaurants_status ON restaurants(status);
 CREATE INDEX IF NOT EXISTS idx_restaurants_is_featured ON restaurants(is_featured);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_restaurants_updated_at ON restaurants;
 CREATE TRIGGER update_restaurants_updated_at BEFORE UPDATE ON restaurants
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

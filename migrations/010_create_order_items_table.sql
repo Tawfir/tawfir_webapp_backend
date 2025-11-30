@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_dish_id ON order_items(dish_id);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_order_items_updated_at ON order_items;
 CREATE TRIGGER update_order_items_updated_at BEFORE UPDATE ON order_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

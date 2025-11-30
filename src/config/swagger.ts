@@ -33,10 +33,6 @@ const options: swaggerJsdoc.Options = {
     },
     tags: [
       {
-        name: 'Health',
-        description: 'Health check endpoints',
-      },
-      {
         name: 'Auth',
         description: 'Authentication endpoints',
       },
@@ -49,20 +45,12 @@ const options: swaggerJsdoc.Options = {
         description: 'Restaurant management endpoints',
       },
       {
-        name: 'Dishes',
-        description: 'Dish/Menu item endpoints',
-      },
-      {
-        name: 'Orders',
-        description: 'Order management endpoints',
-      },
-      {
-        name: 'Categories',
-        description: 'Food category endpoints',
-      },
-      {
         name: 'Payments',
         description: 'Payment and transaction endpoints',
+      },
+      {
+        name: 'Notifications',
+        description: 'Notification endpoints',
       },
       {
         name: 'Admin',

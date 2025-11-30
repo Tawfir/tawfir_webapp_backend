@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_wallet_transactions_order_id ON wallet_transactio
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_type ON wallet_transactions(type);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_wallet_transactions_updated_at ON wallet_transactions;
 CREATE TRIGGER update_wallet_transactions_updated_at BEFORE UPDATE ON wallet_transactions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

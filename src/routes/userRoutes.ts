@@ -34,9 +34,10 @@ router.get('/categories', UserController.getCategories);
 router.get('/categories/:id/dishes', UserController.getCategoryDishes);
 
 // Notification routes
-// router.get('/notifications', UserController.getNotifications);
-// router.patch('/notifications/:id/read', UserController.markNotificationAsRead);
-// router.get('/notifications/unread-count', UserController.getUnreadCount);
+import { NotificationController } from '../controllers/notificationController';
+router.get('/notifications', NotificationController.index);
+router.patch('/notifications/:id/read', NotificationController.markAsRead);
+router.get('/notifications/unread-count', NotificationController.unreadCount);
 
 export default router;
 

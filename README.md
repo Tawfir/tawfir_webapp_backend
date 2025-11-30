@@ -47,7 +47,25 @@ Or use the TypeScript migration runner:
 npx tsx scripts/run-migrations.ts
 ```
 
-### 4. Start Development Server
+### 4. Seed the Database (Optional but Recommended)
+
+Populate the database with initial test data (users, restaurants, dishes, orders):
+
+```bash
+npm run seed
+```
+
+This will create:
+- **Admin user**: `admin@example.com` / `password`
+- **Normal user**: `user@example.com` / `password`
+- **Restaurant user**: `restaurant@example.com` / `password`
+- **1 approved restaurant** with sample dishes
+- **22 sample orders** (6 incoming, 4 ready, 12 completed)
+- **6 food categories**
+
+**Note:** The seeder uses `ON CONFLICT` clauses where possible, so you can run it multiple times safely. It will update existing records if they exist.
+
+### 5. Start Development Server
 
 ```bash
 npm run dev
@@ -55,7 +73,7 @@ npm run dev
 
 The server will start on `http://localhost:8080`
 
-### 5. Verify Setup
+### 6. Verify Setup
 
 Check the health endpoint:
 ```bash

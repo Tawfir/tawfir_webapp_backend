@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_status ON withdrawal_requests
 CREATE INDEX IF NOT EXISTS idx_withdrawal_requests_method ON withdrawal_requests(method);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_withdrawal_requests_updated_at ON withdrawal_requests;
 CREATE TRIGGER update_withdrawal_requests_updated_at BEFORE UPDATE ON withdrawal_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

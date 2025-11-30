@@ -13,6 +13,18 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || '',
 });
 
+// Error codes that indicate the object already exists (safe to ignore)
+const IGNORABLE_ERROR_CODES = [
+  '42710', // duplicate_object - object already exists
+  '42P07', // duplicate_table - table already exists
+  '42P16', // invalid_table_definition - but sometimes used for existing objects
+];
+
+function isIgnorableError(error: any): boolean {
+  if (!error || !error.code) return false;
+  return IGNORABLE_ERROR_CODES.includes(error.code);
+}
+
 async function runMigrations() {
   const migrationsDir = join(__dirname, '../migrations');
   const fs = require('fs');
@@ -31,7 +43,29 @@ async function runMigrations() {
     try {
       await pool.query(sql);
       console.log(`✅ Completed: ${file}`);
-    } catch (error) {
+    } catch (error: any) {
+      // Check if it's an "already exists" error that we can safely ignore
+      if (isIgnorableError(error)) {
+        console.log(`⚠️  Warning in ${file}: ${error.message}`);
+        console.log(`   (Object already exists, skipping...)`);
+        continue;
+      }
+      
+      // For other errors, check if it's a trigger/function that already exists
+      const errorMessage = error.message?.toLowerCase() || '';
+      if (
+        errorMessage.includes('already exists') &&
+        (errorMessage.includes('trigger') || 
+         errorMessage.includes('function') ||
+         errorMessage.includes('index') ||
+         errorMessage.includes('constraint'))
+      ) {
+        console.log(`⚠️  Warning in ${file}: ${error.message}`);
+        console.log(`   (Object already exists, skipping...)`);
+        continue;
+      }
+      
+      // For serious errors, throw
       console.error(`❌ Error in ${file}:`, error);
       throw error;
     }

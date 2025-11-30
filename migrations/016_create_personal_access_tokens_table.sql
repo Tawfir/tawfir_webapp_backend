@@ -17,6 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_personal_access_tokens_tokenable ON personal_acce
 CREATE INDEX IF NOT EXISTS idx_personal_access_tokens_token ON personal_access_tokens(token);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_personal_access_tokens_updated_at ON personal_access_tokens;
 CREATE TRIGGER update_personal_access_tokens_updated_at BEFORE UPDATE ON personal_access_tokens
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

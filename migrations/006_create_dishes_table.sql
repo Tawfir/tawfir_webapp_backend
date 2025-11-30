@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS dishes (
 CREATE INDEX IF NOT EXISTS idx_dishes_restaurant_id ON dishes(restaurant_id);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_dishes_updated_at ON dishes;
 CREATE TRIGGER update_dishes_updated_at BEFORE UPDATE ON dishes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
