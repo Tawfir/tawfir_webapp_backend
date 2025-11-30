@@ -19,6 +19,9 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }));
+// Raw body parser for Stripe webhook (must be before json parser)
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,6 +59,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/payment', paymentRoutes);
+
+// Stripe webhook (public, no auth, needs raw body)
+import { StripeWebhookController } from './controllers/paymentController';
+app.post('/api/stripe/webhook', StripeWebhookController.handle);
+
 // app.use('/api/admin', adminRoutes);
 
 // 404 handler
