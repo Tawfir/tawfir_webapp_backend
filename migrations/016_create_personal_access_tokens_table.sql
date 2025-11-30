@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS personal_access_tokens (
     tokenable_type VARCHAR(255) NOT NULL,
     tokenable_id BIGINT NOT NULL,
     name VARCHAR(255) NOT NULL,
-    token VARCHAR(64) UNIQUE NOT NULL,
+    token TEXT UNIQUE NOT NULL,
     abilities TEXT NULL,
     last_used_at TIMESTAMP NULL,
     expires_at TIMESTAMP NULL,

@@ -284,6 +284,10 @@ async function seedDatabase() {
     const userId = userIds['user'];
     const pickupTimes = ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30'];
     
+    // Delete existing orders for this restaurant to ensure fresh data for today
+    await client.query('DELETE FROM orders WHERE restaurant_id = $1', [restaurantId]);
+    console.log('   ✓ Cleared existing orders');
+    
     // Get all dishes for orders
     const allDishesResult = await client.query(
       'SELECT id, price, discounted_price FROM dishes WHERE restaurant_id = $1',
@@ -311,10 +315,11 @@ async function seedDatabase() {
             .slice(0, numberOfDishes);
 
           let totalPrice = 0;
+          // Create orders for today with random times throughout the day
           const now = new Date();
           const createdAt = new Date(now);
-          createdAt.setHours(9 + Math.floor(Math.random() * 14));
-          createdAt.setMinutes(Math.floor(Math.random() * 60));
+          // Set random time between 9 AM and 11 PM today
+          createdAt.setHours(9 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60), 0, 0);
 
           // Create order
           const orderResult = await client.query(
