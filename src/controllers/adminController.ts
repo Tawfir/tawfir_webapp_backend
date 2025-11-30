@@ -197,5 +197,140 @@ export class AdminController {
       error(res, err.message || 'Failed to retrieve statistics', 500);
     }
   }
+
+  /**
+   * @swagger
+   * /api/admin/categories:
+   *   get:
+   *     summary: Get all food categories (admin view)
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Search query for category name or slug
+   *     responses:
+   *       200:
+   *         description: Categories retrieved successfully
+   */
+  static async getCategories(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { search } = req.query;
+      let query = `
+        SELECT fc.id, fc.name, fc.slug, fc.image, fc.cover,
+               COUNT(DISTINCT fcd.dish_id) AS "dishesCount",
+               COUNT(DISTINCT fcr.restaurant_id) AS "restaurantsCount"
+        FROM food_categories fc
+        LEFT JOIN food_category_dish fcd ON fc.id = fcd.food_category_id
+        LEFT JOIN food_category_restaurant fcr ON fc.id = fcr.food_category_id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (search) {
+        query += ` AND (fc.name ILIKE $${paramIndex} OR fc.slug ILIKE $${paramIndex})`;
+        params.push(`%${search}%`);
+        paramIndex++;
+      }
+
+      query += ` GROUP BY fc.id ORDER BY fc.name ASC`;
+
+      const result = await pool.query(query, params);
+      success(res, { categories: result.rows }, 'Food categories retrieved successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to retrieve food categories', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/admin/categories:
+   *   post:
+   *     summary: Create a new food category
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - name
+   *             properties:
+   *               name:
+   *                 type: string
+   *               slug:
+   *                 type: string
+   *               image:
+   *                 type: string
+   *               cover:
+   *                 type: string
+   *     responses:
+   *       201:
+   *         description: Category created successfully
+   *       400:
+   *         description: Validation error
+   */
+  static async createCategory(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { name, slug, image, cover } = req.body;
+
+      if (!name || name.trim() === '') {
+        error(res, 'Category name is required', 400);
+        return;
+      }
+
+      // Generate slug from name if not provided
+      let categorySlug = slug || name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+      // Check if slug already exists
+      const existingCategory = await pool.query(
+        'SELECT id FROM food_categories WHERE slug = $1',
+        [categorySlug]
+      );
+
+      if (existingCategory.rows.length > 0) {
+        // If slug exists, append a number
+        let counter = 1;
+        let uniqueSlug = `${categorySlug}-${counter}`;
+        while (true) {
+          const check = await pool.query(
+            'SELECT id FROM food_categories WHERE slug = $1',
+            [uniqueSlug]
+          );
+          if (check.rows.length === 0) {
+            categorySlug = uniqueSlug;
+            break;
+          }
+          counter++;
+          uniqueSlug = `${categorySlug.split('-').slice(0, -1).join('-')}-${counter}`;
+        }
+      }
+
+      // Create category
+      const result = await pool.query(
+        `INSERT INTO food_categories (name, slug, image, cover, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         RETURNING id, name, slug, image, cover, created_at, updated_at`,
+        [name.trim(), categorySlug, image || null, cover || null]
+      );
+
+      success(res, { category: result.rows[0] }, 'Category created successfully', 201);
+    } catch (err: any) {
+      if (err.code === '23505') { // Unique constraint violation
+        error(res, 'A category with this slug already exists', 400);
+        return;
+      }
+      error(res, err.message || 'Failed to create category', 500);
+    }
+  }
 }
 

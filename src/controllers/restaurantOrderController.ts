@@ -51,7 +51,7 @@ export class RestaurantOrderController {
       for (const order of ordersResult.rows) {
         const itemsResult = await pool.query(
           `SELECT oi.*, 
-           json_build_object('id', d.id, 'name', d.name, 'image', d.image, 'price', d.price) as dish
+           json_build_object('id', d.id, 'name', d.name, 'image', d.image, 'price', d.price, 'co2_saved', d.co2_saved) as dish
            FROM order_items oi
            JOIN dishes d ON oi.dish_id = d.id
            WHERE oi.order_id = $1`,

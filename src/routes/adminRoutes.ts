@@ -16,6 +16,8 @@ router.get('/', AdminController.index);
 router.get('/restaurants', AdminController.getRestaurants);
 router.get('/orders', AdminController.getOrders);
 router.get('/withdrawals', AdminController.getWithdrawals);
+router.get('/categories', AdminController.getCategories);
+router.post('/categories', AdminController.createCategory);
 router.get('/stats', AdminController.getStats);
 
 export default router;
