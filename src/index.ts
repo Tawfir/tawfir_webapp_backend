@@ -2,21 +2,31 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import swaggerUi from 'swagger-ui-express';
 import { pool } from './config/database';
+import { swaggerSpec } from './config/swagger';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8080;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for Swagger UI
+}));
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Tawfir API Documentation',
+}));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -36,14 +46,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// API Routes will be added here
-// app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
-// app.use('/api/restaurants', restaurantRoutes);
-// app.use('/api/dishes', dishRoutes);
-// app.use('/api/orders', orderRoutes);
-// app.use('/api/categories', categoryRoutes);
-// app.use('/api/payments', paymentRoutes);
+// API Routes
+import authRoutes from './routes/authRoutes';
+import userRoutes from './routes/userRoutes';
+import restaurantRoutes from './routes/restaurantRoutes';
+import paymentRoutes from './routes/paymentRoutes';
+
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/restaurant', restaurantRoutes);
+app.use('/api/payment', paymentRoutes);
 // app.use('/api/admin', adminRoutes);
 
 // 404 handler
@@ -64,5 +76,6 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
 });
 

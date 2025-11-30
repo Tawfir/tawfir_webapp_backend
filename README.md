@@ -53,13 +53,13 @@ npx tsx scripts/run-migrations.ts
 npm run dev
 ```
 
-The server will start on `http://localhost:8000`
+The server will start on `http://localhost:8080`
 
 ### 5. Verify Setup
 
 Check the health endpoint:
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8080/api/health
 ```
 
 You should see:
@@ -104,42 +104,22 @@ The database includes the following tables:
 - `personal_access_tokens` - API authentication tokens
 - `failed_jobs` - Failed queue jobs
 
-## Project Structure
 
-```
-backend/
-├── src/
-│   ├── config/
-│   │   └── database.ts       # PostgreSQL connection pool
-│   ├── controllers/          # Route controllers (to be added)
-│   ├── models/              # Database models (to be added)
-│   ├── routes/              # API routes (to be added)
-│   ├── middleware/          # Express middleware (to be added)
-│   ├── utils/               # Utility functions (to be added)
-│   └── index.ts             # Express app entry point
-├── migrations/              # SQL migration files
-├── scripts/                 # Utility scripts
-├── dist/                    # Compiled JavaScript (generated)
-└── package.json
-```
+## API Documentation (Swagger UI)
 
-## Available Scripts
+All API endpoints and their descriptions are available via Swagger UI when the server is running:
 
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run start` - Start production server
-- `npm run migrate` - Run database migrations (using node-pg-migrate)
-- `npx tsx scripts/run-migrations.ts` - Run migrations using TypeScript script
+- **Development:** `http://localhost:8080/api-docs`
+- **Production:** `https://your-api-url.com/api-docs`
 
-## Environment Variables
+This is where you can see all the API endpoints and descriptions. The Swagger UI provides:
+- Complete list of all available API endpoints
+- Detailed endpoint descriptions and parameters
+- Request/response schemas
+- Try-it-out functionality for testing endpoints
+- Authentication information
 
-See `.env.example` for all available environment variables.
 
-## API Endpoints
-
-API endpoints will be added as the backend is developed. The base URL is:
-- Development: `http://localhost:8000/api`
-- Production: (to be configured)
 
 ## Notes
 
