@@ -7,10 +7,12 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "node-pg-migrate",
-    "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down",
-    "migrate:create": "node-pg-migrate create"
+    "migrate": "tsx scripts/run-migrations.ts",
+    "migrate:up": "tsx scripts/run-migrations.ts",
+    "migrate:down": "echo 'Rollback not implemented. Manually drop tables if needed.'",
+    "migrate:create": "echo 'Create new migration files manually in the migrations/ directory.'",
+    "seed": "tsx scripts/seed-database.ts",
+    "db:seed": "tsx scripts/seed-database.ts"
   },
   "keywords": [],
   "author": "",
@@ -25,7 +27,9 @@
     "zod": "^3.22.4",
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.1.5",
-    "stripe": "^14.21.0"
+    "stripe": "^14.21.0",
+    "swagger-ui-express": "^5.0.0",
+    "swagger-jsdoc": "^6.2.8"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -34,10 +38,11 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.5",
     "@types/cors": "^2.8.17",
+    "@types/swagger-ui-express": "^4.1.6",
+    "@types/swagger-jsdoc": "^6.0.4",
     "typescript": "^5.3.3",
     "tsx": "^4.7.0",
-    "node-pg-migrate": "^6.2.2",
-    "@types/node-pg-migrate": "^6.0.0"
+    "node-pg-migrate": "^6.2.2"
   }
 }
 

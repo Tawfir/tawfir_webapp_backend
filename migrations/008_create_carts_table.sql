@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_carts_user_id ON carts(user_id);
 CREATE INDEX IF NOT EXISTS idx_carts_dish_id ON carts(dish_id);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_carts_updated_at ON carts;
 CREATE TRIGGER update_carts_updated_at BEFORE UPDATE ON carts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

@@ -12,5 +12,11 @@ router.use(isAdmin);
 // Admin user endpoint
 router.get('/', AdminController.index);
 
+// Admin management endpoints
+router.get('/restaurants', AdminController.getRestaurants);
+router.get('/orders', AdminController.getOrders);
+router.get('/withdrawals', AdminController.getWithdrawals);
+router.get('/stats', AdminController.getStats);
+
 export default router;
 

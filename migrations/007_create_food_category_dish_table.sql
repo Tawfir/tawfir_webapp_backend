@@ -15,6 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_food_category_dish_dish_id ON food_category_dish(
 CREATE INDEX IF NOT EXISTS idx_food_category_dish_food_category_id ON food_category_dish(food_category_id);
 
 -- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_food_category_dish_updated_at ON food_category_dish;
 CREATE TRIGGER update_food_category_dish_updated_at BEFORE UPDATE ON food_category_dish
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
