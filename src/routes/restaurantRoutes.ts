@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import express from 'express';
 import { authenticate } from '../middleware/auth';
 import { restaurantApproved } from '../middleware/restaurantApproved';
 import { uploadSingle, uploadFields } from '../middleware/upload';
@@ -44,7 +45,7 @@ router.delete('/dishes/:id', RestaurantDishController.destroy);
 // Order routes (must come before /:id? route)
 router.get('/orders', RestaurantOrderController.index);
 router.get('/orders/:id', RestaurantOrderController.show);
-router.put('/orders/:id/status', RestaurantOrderController.updateStatus);
+router.put('/orders/:id/status', express.json(), RestaurantOrderController.updateStatus);
 router.get('/stats/chart', RestaurantOrderController.getChartData);
 
 // Transaction routes (must come before /:id? route)

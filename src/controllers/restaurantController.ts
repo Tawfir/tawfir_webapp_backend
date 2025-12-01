@@ -25,6 +25,8 @@ const updateRestaurantSchema = z.object({
   private_phone: z.string().optional(),
   working_hours: z.any().optional(),
   food_category_ids: z.array(z.number().int().positive()).optional(),
+  owner_name: z.string().min(1).optional(),
+  owner_email: z.string().email().optional(),
 });
 
 export class RestaurantController {
@@ -200,11 +202,13 @@ export class RestaurantController {
         // Get user's own restaurant
         const result = await pool.query(
           `SELECT r.*,
+           u.name as owner_name, u.email as owner_email,
            (SELECT json_agg(json_build_object('id', fc.id, 'name', fc.name, 'image', fc.image))
             FROM food_categories fc
             JOIN food_category_restaurant fcr ON fc.id = fcr.food_category_id
             WHERE fcr.restaurant_id = r.id) as categories
            FROM restaurants r
+           JOIN users u ON r.user_id = u.id
            WHERE r.user_id = $1`,
           [req.user.id]
         );
@@ -307,6 +311,8 @@ export class RestaurantController {
           ? req.body.food_category_ids.map((id: string) => parseInt(id))
           : JSON.parse(req.body.food_category_ids).map((id: number) => parseInt(String(id)));
       }
+      if (req.body.owner_name) bodyData.owner_name = req.body.owner_name;
+      if (req.body.owner_email) bodyData.owner_email = req.body.owner_email;
 
       const validated = updateRestaurantSchema.parse(bodyData);
 
@@ -420,6 +426,37 @@ export class RestaurantController {
         const query = `UPDATE restaurants SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount} RETURNING *`;
         const updateResult = await pool.query(query, values);
         Object.assign(restaurant, updateResult.rows[0]);
+      }
+
+      // Update owner information if provided
+      if (validated.owner_name || validated.owner_email) {
+        const userUpdates: string[] = [];
+        const userValues: any[] = [];
+        let userParamCount = 1;
+
+        if (validated.owner_name) {
+          userUpdates.push(`name = $${userParamCount++}`);
+          userValues.push(validated.owner_name);
+        }
+        if (validated.owner_email) {
+          // Check if email already exists for another user
+          const emailCheck = await pool.query(
+            'SELECT id FROM users WHERE email = $1 AND id != $2',
+            [validated.owner_email, req.user.id]
+          );
+          if (emailCheck.rows.length > 0) {
+            error(res, 'Email already exists for another user', 400);
+            return;
+          }
+          userUpdates.push(`email = $${userParamCount++}`);
+          userValues.push(validated.owner_email);
+        }
+
+        if (userUpdates.length > 0) {
+          userValues.push(req.user.id);
+          const userQuery = `UPDATE users SET ${userUpdates.join(', ')}, updated_at = NOW() WHERE id = $${userParamCount}`;
+          await pool.query(userQuery, userValues);
+        }
       }
 
       // Sync categories if provided
