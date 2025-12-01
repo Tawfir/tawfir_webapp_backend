@@ -225,5 +225,89 @@ export class RestaurantOrderController {
       error(res, err.message || 'Order status update failed', 500);
     }
   }
+
+  /**
+   * @swagger
+   * /api/restaurant/stats/chart:
+   *   get:
+   *     summary: Get restaurant dashboard chart data (CO2 and orders over time)
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: type
+   *         schema:
+   *           type: string
+   *           enum: [co2, orders]
+   *         description: Type of chart data to retrieve
+   *     responses:
+   *       200:
+   *         description: Chart data retrieved successfully
+   */
+  static async getChartData(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || !(req as any).restaurant) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const restaurant = (req as any).restaurant;
+      const { type } = req.query;
+      const chartType = type === 'orders' ? 'orders' : 'co2';
+      const days = 30;
+
+      // Generate date range for last 30 days
+      const data = [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+
+        const month = date.toLocaleDateString("en-US", { month: "short" });
+        const day = date.getDate();
+        const dateLabel = `${month} ${day}`;
+
+        if (chartType === 'co2') {
+          // Get CO2 saved for this day from completed orders for this restaurant
+          const co2Result = await pool.query(
+            `SELECT COALESCE(SUM((d.co2_saved * oi.quantity)), 0) as total
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             JOIN dishes d ON oi.dish_id = d.id
+             WHERE o.restaurant_id = $1
+               AND o.status = 'completed' 
+               AND o.created_at >= $2 
+               AND o.created_at < $3
+               AND d.co2_saved IS NOT NULL`,
+            [restaurant.id, date, nextDate]
+          );
+          const value = parseFloat(co2Result.rows[0].total) || 0;
+          data.push({ date: dateLabel, value: parseFloat(value.toFixed(2)) });
+        } else {
+          // Get number of completed orders for this day for this restaurant
+          const ordersResult = await pool.query(
+            `SELECT COUNT(*) as count
+             FROM orders
+             WHERE restaurant_id = $1
+               AND status = 'completed'
+               AND created_at >= $2
+               AND created_at < $3`,
+            [restaurant.id, date, nextDate]
+          );
+          const value = parseInt(ordersResult.rows[0].count) || 0;
+          data.push({ date: dateLabel, value });
+        }
+      }
+
+      success(res, { data }, 'Chart data retrieved successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to retrieve chart data', 500);
+    }
+  }
 }
 

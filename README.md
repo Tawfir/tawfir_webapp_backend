@@ -15,7 +15,9 @@ Node.js/Express backend with TypeScript and PostgreSQL for the Tawfir platform.
 npm install
 ```
 
-### 2. Set Up PostgreSQL Database
+### 2. Set Up Databases
+
+#### 2a: Postgres SQL Database
 
 1. Create a PostgreSQL database:
 ```sql
@@ -33,6 +35,10 @@ Edit `.env` and update:
 - `DB_NAME` - Database name (default: tawfir_db)
 - `DB_USER` - PostgreSQL username
 - `DB_PASSWORD` - PostgreSQL password
+
+#### 2b: AWS S3 Buckets
+
+You can follow the instructions to setup the AWS S3 Buckets with this [link](./S3_SETUP.md). 
 
 ### 3. Run Database Migrations
 

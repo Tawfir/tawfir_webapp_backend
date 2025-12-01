@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { success, error } from '../utils/response';
 import { pool } from '../config/database';
 import { z } from 'zod';
+import { uploadToS3, deleteFromS3, extractS3Key } from '../services/s3Service';
 
 const createRestaurantSchema = z.object({
   restaurant_name: z.string().min(1).max(255),
@@ -277,13 +278,37 @@ export class RestaurantController {
    *         description: Restaurant not found
    */
   static async update(req: AuthRequest, res: Response): Promise<void> {
+    let profilePicUrl: string | null = null;
+    let coverImageUrl: string | null = null;
+    let oldProfilePicUrl: string | null = null;
+    let oldCoverImageUrl: string | null = null;
+    
     try {
       if (!req.user) {
         error(res, 'Unauthorized', 401);
         return;
       }
 
-      const validated = updateRestaurantSchema.parse(req.body);
+      // Parse body data (FormData sends everything as strings)
+      const bodyData: any = {};
+      if (req.body.restaurant_name) bodyData.restaurant_name = req.body.restaurant_name;
+      if (req.body.address) bodyData.address = req.body.address;
+      if (req.body.lat) bodyData.lat = parseFloat(req.body.lat);
+      if (req.body.lng) bodyData.lng = parseFloat(req.body.lng);
+      if (req.body.public_phone) bodyData.public_phone = req.body.public_phone;
+      if (req.body.private_phone) bodyData.private_phone = req.body.private_phone;
+      if (req.body.working_hours) {
+        bodyData.working_hours = typeof req.body.working_hours === 'string' 
+          ? JSON.parse(req.body.working_hours) 
+          : req.body.working_hours;
+      }
+      if (req.body.food_category_ids) {
+        bodyData.food_category_ids = Array.isArray(req.body.food_category_ids)
+          ? req.body.food_category_ids.map((id: string) => parseInt(id))
+          : JSON.parse(req.body.food_category_ids).map((id: number) => parseInt(String(id)));
+      }
+
+      const validated = updateRestaurantSchema.parse(bodyData);
 
       // Get user's restaurant
       const restaurantResult = await pool.query(
@@ -297,6 +322,46 @@ export class RestaurantController {
       }
 
       const restaurant = restaurantResult.rows[0];
+      oldProfilePicUrl = restaurant.profile_pic;
+      oldCoverImageUrl = restaurant.cover_image;
+
+      // Handle file uploads if provided
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      
+      if (files?.profile_pic && files.profile_pic[0]) {
+        const uploadResult = await uploadToS3(
+          files.profile_pic[0].buffer,
+          'restaurants/profile',
+          files.profile_pic[0].originalname,
+          files.profile_pic[0].mimetype
+        );
+        profilePicUrl = uploadResult.url;
+      }
+
+      if (files?.cover_image && files.cover_image[0]) {
+        const uploadResult = await uploadToS3(
+          files.cover_image[0].buffer,
+          'restaurants/cover',
+          files.cover_image[0].originalname,
+          files.cover_image[0].mimetype
+        );
+        coverImageUrl = uploadResult.url;
+      }
+
+      // Handle place_pics uploads
+      let placePicsUrls: string[] = [];
+      if (files?.place_pics && files.place_pics.length > 0) {
+        // Upload each place picture to S3
+        for (const file of files.place_pics) {
+          const uploadResult = await uploadToS3(
+            file.buffer,
+            'restaurants/place-pics',
+            file.originalname,
+            file.mimetype
+          );
+          placePicsUrls.push(uploadResult.url);
+        }
+      }
 
       // Build update query dynamically
       const updates: string[] = [];
@@ -330,6 +395,24 @@ export class RestaurantController {
       if (validated.working_hours !== undefined) {
         updates.push(`working_hours = $${paramCount++}`);
         values.push(JSON.stringify(validated.working_hours));
+      }
+      if (profilePicUrl) {
+        updates.push(`profile_pic = $${paramCount++}`);
+        values.push(profilePicUrl);
+      }
+      if (coverImageUrl) {
+        updates.push(`cover_image = $${paramCount++}`);
+        values.push(coverImageUrl);
+      }
+      if (placePicsUrls.length > 0) {
+        // Get existing place_pics from database
+        const existingPlacePics = restaurant.place_pics 
+          ? (Array.isArray(restaurant.place_pics) ? restaurant.place_pics : [])
+          : [];
+        // Merge existing and new place pics
+        const allPlacePics = [...existingPlacePics, ...placePicsUrls];
+        updates.push(`place_pics = $${paramCount++}`);
+        values.push(JSON.stringify(allPlacePics));
       }
 
       if (updates.length > 0) {
@@ -375,6 +458,200 @@ export class RestaurantController {
         return;
       }
       error(res, err.message || 'Restaurant update failed', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/restaurant/profile-pic:
+   *   delete:
+   *     summary: Delete restaurant profile picture
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Profile picture deleted successfully
+   *       404:
+   *         description: Restaurant not found or has no profile picture
+   */
+  static async deleteProfilePic(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const restaurantResult = await pool.query(
+        'SELECT * FROM restaurants WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (restaurantResult.rows.length === 0) {
+        error(res, 'Restaurant not found', 404);
+        return;
+      }
+
+      const restaurant = restaurantResult.rows[0];
+
+      if (!restaurant.profile_pic) {
+        error(res, 'Restaurant has no profile picture to delete', 404);
+        return;
+      }
+
+      // Delete from S3
+      try {
+        await deleteFromS3(extractS3Key(restaurant.profile_pic));
+      } catch (s3Err) {
+        console.error('Failed to delete profile picture from S3:', s3Err);
+        // Continue to update database even if S3 deletion fails
+      }
+
+      // Update database to set profile_pic to null
+      await pool.query(
+        'UPDATE restaurants SET profile_pic = NULL, updated_at = NOW() WHERE id = $1',
+        [restaurant.id]
+      );
+
+      success(res, { restaurant_id: restaurant.id }, 'Profile picture deleted successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to delete profile picture', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/restaurant/cover-image:
+   *   delete:
+   *     summary: Delete restaurant cover image
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Cover image deleted successfully
+   *       404:
+   *         description: Restaurant not found or has no cover image
+   */
+  static async deleteCoverImage(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const restaurantResult = await pool.query(
+        'SELECT * FROM restaurants WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (restaurantResult.rows.length === 0) {
+        error(res, 'Restaurant not found', 404);
+        return;
+      }
+
+      const restaurant = restaurantResult.rows[0];
+
+      if (!restaurant.cover_image) {
+        error(res, 'Restaurant has no cover image to delete', 404);
+        return;
+      }
+
+      // Delete from S3
+      try {
+        await deleteFromS3(extractS3Key(restaurant.cover_image));
+      } catch (s3Err) {
+        console.error('Failed to delete cover image from S3:', s3Err);
+        // Continue to update database even if S3 deletion fails
+      }
+
+      // Update database to set cover_image to null
+      await pool.query(
+        'UPDATE restaurants SET cover_image = NULL, updated_at = NOW() WHERE id = $1',
+        [restaurant.id]
+      );
+
+      success(res, { restaurant_id: restaurant.id }, 'Cover image deleted successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to delete cover image', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/restaurant/place-pics/{index}:
+   *   delete:
+   *     summary: Delete a place picture by index
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: index
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     responses:
+   *       200:
+   *         description: Place picture deleted successfully
+   *       404:
+   *         description: Restaurant not found or invalid index
+   */
+  static async deletePlacePic(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const index = parseInt(req.params.index);
+      if (isNaN(index) || index < 0) {
+        error(res, 'Invalid index', 400);
+        return;
+      }
+
+      const restaurantResult = await pool.query(
+        'SELECT * FROM restaurants WHERE user_id = $1',
+        [req.user.id]
+      );
+
+      if (restaurantResult.rows.length === 0) {
+        error(res, 'Restaurant not found', 404);
+        return;
+      }
+
+      const restaurant = restaurantResult.rows[0];
+
+      // Parse place_pics from JSONB
+      const placePics = Array.isArray(restaurant.place_pics) 
+        ? restaurant.place_pics 
+        : (restaurant.place_pics ? [restaurant.place_pics] : []);
+
+      if (index >= placePics.length) {
+        error(res, 'Invalid index: place picture not found', 404);
+        return;
+      }
+
+      const imageUrl = placePics[index];
+
+      // Delete from S3
+      try {
+        await deleteFromS3(extractS3Key(imageUrl));
+      } catch (s3Err) {
+        console.error('Failed to delete place picture from S3:', s3Err);
+        // Continue to update database even if S3 deletion fails
+      }
+
+      // Remove from array and update database
+      const updatedPlacePics = placePics.filter((_, i) => i !== index);
+      await pool.query(
+        'UPDATE restaurants SET place_pics = $1, updated_at = NOW() WHERE id = $2',
+        [JSON.stringify(updatedPlacePics), restaurant.id]
+      );
+
+      success(res, { restaurant_id: restaurant.id, index }, 'Place picture deleted successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to delete place picture', 500);
     }
   }
 }
