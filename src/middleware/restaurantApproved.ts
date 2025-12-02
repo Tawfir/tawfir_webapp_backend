@@ -14,13 +14,19 @@ export const restaurantApproved = async (
     }
 
     // Get restaurant for the authenticated user
+    // Note: restaurants table uses 'name' column, not 'restaurant_name'
     const restaurantResult = await pool.query(
-      'SELECT id, status FROM restaurants WHERE user_id = $1',
+      'SELECT id, status, name FROM restaurants WHERE user_id = $1',
       [req.user.id]
     );
 
     if (restaurantResult.rows.length === 0) {
-      res.status(403).json({ error: 'Restaurant not found. Please register your restaurant first.' });
+      res.status(403).json({ 
+        error: 'Restaurant not found. Please register your restaurant first.',
+        message: 'Restaurant not found. Please register your restaurant first.',
+        code: 'RESTAURANT_NOT_FOUND',
+        userId: req.user.id
+      });
       return;
     }
 
@@ -30,7 +36,9 @@ export const restaurantApproved = async (
     if (restaurant.status !== 'approved') {
       res.status(403).json({ 
         error: 'Restaurant not approved',
-        message: 'Your restaurant application is pending approval. Please wait for admin approval.'
+        message: `Your restaurant "${restaurant.name || 'Restaurant'}" is ${restaurant.status}. Please wait for admin approval.`,
+        status: restaurant.status,
+        code: 'RESTAURANT_NOT_APPROVED'
       });
       return;
     }

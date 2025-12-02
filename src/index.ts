@@ -22,8 +22,9 @@ app.use(cors({
 // Raw body parser for Stripe webhook (must be before json parser)
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Note: We do NOT apply body parsers globally
+// Routes with file uploads (restaurantRoutes, adminRoutes) use multer which handles multipart/form-data
+// Routes without file uploads get JSON parser applied individually below
 
 // Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
@@ -56,10 +57,13 @@ import restaurantRoutes from './routes/restaurantRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import adminRoutes from './routes/adminRoutes';
 
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
+// Routes that need JSON body parsing (no file uploads)
+app.use('/api/auth', express.json({ limit: '10mb' }), express.urlencoded({ extended: true, limit: '10mb' }), authRoutes);
+app.use('/api/user', express.json({ limit: '10mb' }), express.urlencoded({ extended: true, limit: '10mb' }), userRoutes);
+app.use('/api/payment', express.json({ limit: '10mb' }), express.urlencoded({ extended: true, limit: '10mb' }), paymentRoutes);
+
+// Routes with file uploads - NO JSON parser (multer handles multipart/form-data and populates req.body)
 app.use('/api/restaurant', restaurantRoutes);
-app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Stripe webhook (public, no auth, needs raw body)
