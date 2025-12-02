@@ -1,17 +1,48 @@
-import { Pool } from 'pg';
+import { Pool, PoolConfig } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'tawfir_db',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-});
+// Support both DATABASE_URL (production) and individual variables (development)
+let dbConfig: PoolConfig;
+
+if (process.env.DATABASE_URL) {
+  // Production: Use connection string (from Vercel, Railway, etc.)
+  console.log('🔗 Using DATABASE_URL connection string');
+  console.log('📍 Host:', process.env.DATABASE_URL.match(/@([^:]+)/)?.[1] || 'unknown');
+  
+  // Parse connection string to check if it's a pooler (port 6543) or direct (port 5432)
+  const isPooler = process.env.DATABASE_URL.includes(':6543') || process.env.DATABASE_URL.includes('pooler');
+  
+  // For connection strings, SSL is handled via the connection string itself
+  // But we also need to explicitly set SSL config for the pg library
+  dbConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false, // Allow self-signed certificates (required for Supabase pooler)
+    },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000, // Increased timeout for network issues
+  };
+} else {
+  // Development: Use individual variables
+  console.log('🔗 Using individual DB_* variables (localhost)');
+  dbConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'tawfir_db',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+  };
+}
+
+const pool = new Pool(dbConfig);
 
 // Error codes that indicate the object already exists (safe to ignore)
 const IGNORABLE_ERROR_CODES = [

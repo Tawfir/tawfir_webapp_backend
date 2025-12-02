@@ -12,7 +12,9 @@
     "migrate:down": "echo 'Rollback not implemented. Manually drop tables if needed.'",
     "migrate:create": "echo 'Create new migration files manually in the migrations/ directory.'",
     "seed": "tsx scripts/seed-database.ts",
-    "db:seed": "tsx scripts/seed-database.ts"
+    "db:seed": "tsx scripts/seed-database.ts",
+    "seed:users": "tsx scripts/seed-users.ts",
+    "seed:prod": "tsx scripts/seed-users.ts"
   },
   "keywords": [],
   "author": "",
