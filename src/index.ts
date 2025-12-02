@@ -85,9 +85,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-});
+// For Vercel serverless, export the app
+// For local development, start the server
+if (require.main === module) {
+  // Running directly (local development)
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+  });
+} else {
+  // Imported as module (Vercel serverless)
+  module.exports = app;
+}
 
