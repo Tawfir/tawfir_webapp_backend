@@ -1,6 +1,6 @@
 import { pool } from '../config/database';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import crypto from 'crypto';
 
 export interface User {
@@ -100,14 +100,20 @@ export class AuthService {
    * Create a JWT token and store it in database
    */
   static async createToken(userId: number): Promise<string> {
+    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+    const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+    
+    // Type assertion for expiresIn to satisfy jsonwebtoken types
     const token = jwt.sign(
       { userId },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      secret,
+      { expiresIn: expiresIn as any }
     );
 
     // Calculate expiration date
-    const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     const expiresAt = new Date();
     if (expiresIn.includes('d')) {
       expiresAt.setDate(expiresAt.getDate() + parseInt(expiresIn));

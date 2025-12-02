@@ -680,7 +680,7 @@ export class RestaurantController {
       }
 
       // Remove from array and update database
-      const updatedPlacePics = placePics.filter((_, i) => i !== index);
+      const updatedPlacePics = placePics.filter((_: string, i: number) => i !== index);
       await pool.query(
         'UPDATE restaurants SET place_pics = $1, updated_at = NOW() WHERE id = $2',
         [JSON.stringify(updatedPlacePics), restaurant.id]
