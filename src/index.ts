@@ -85,17 +85,17 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// For Vercel serverless, export the app
+// Export for Vercel serverless (CommonJS - matches TypeScript output)
+// Vercel will use this as the serverless function handler
+module.exports = app;
+
 // For local development, start the server
+// Only run if this file is executed directly (not imported)
 if (require.main === module) {
-  // Running directly (local development)
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
   });
-} else {
-  // Imported as module (Vercel serverless)
-  module.exports = app;
 }
 
