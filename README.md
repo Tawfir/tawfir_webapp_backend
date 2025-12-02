@@ -19,22 +19,7 @@ npm install
 
 #### 2a: Postgres SQL Database
 
-1. Create a PostgreSQL database:
-```sql
-CREATE DATABASE tawfir_db;
-```
-
-2. Update the `.env` file with your database credentials:
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and update:
-- `DB_HOST` - PostgreSQL host (default: localhost)
-- `DB_PORT` - PostgreSQL port (default: 5432)
-- `DB_NAME` - Database name (default: tawfir_db)
-- `DB_USER` - PostgreSQL username
-- `DB_PASSWORD` - PostgreSQL password
+You can follow the instructions to setup the PostGres SQL Database with this [link](./DATABASE_SETUP.md). 
 
 #### 2b: AWS S3 Buckets
 
@@ -69,7 +54,11 @@ This will create:
 - **22 sample orders** (6 incoming, 4 ready, 12 completed)
 - **6 food categories**
 
-**Note:** The seeder uses `ON CONFLICT` clauses where possible, so you can run it multiple times safely. It will update existing records if they exist.
+
+For production it's recommended not to populate the database with all this mock data, but you can populate just the users for demo purposes: 
+```bash
+npm run seed:users
+```
 
 ### 5. Start Development Server
 
@@ -95,40 +84,6 @@ You should see:
 }
 ```
 
-## Database Schema
-
-The database includes the following tables:
-
-### Core Tables
-- `users` - User accounts (customers, restaurant owners, admins)
-- `roles` - User roles
-- `permissions` - System permissions
-- `role_user` - User-role relationships
-- `permission_user` - User-permission relationships
-- `permission_role` - Role-permission relationships
-
-### Restaurant & Menu
-- `restaurants` - Restaurant information
-- `food_categories` - Food category definitions
-- `food_category_restaurant` - Restaurant-category relationships
-- `dishes` - Menu items/dishes
-- `food_category_dish` - Dish-category relationships
-
-### Orders & Payments
-- `carts` - Shopping cart items
-- `orders` - Customer orders
-- `order_items` - Order line items
-- `transactions` - Payment transactions
-- `wallet_transactions` - Wallet credit/debit transactions
-- `withdrawal_requests` - Restaurant withdrawal requests
-
-### Other
-- `notifications` - System notifications
-- `password_reset_tokens` - Password reset tokens
-- `personal_access_tokens` - API authentication tokens
-- `failed_jobs` - Failed queue jobs
-
-
 ## API Documentation (Swagger UI)
 
 All API endpoints and their descriptions are available via Swagger UI when the server is running:
@@ -142,14 +97,3 @@ This is where you can see all the API endpoints and descriptions. The Swagger UI
 - Request/response schemas
 - Try-it-out functionality for testing endpoints
 - Authentication information
-
-
-
-## Notes
-
-- All timestamps use PostgreSQL's `TIMESTAMP` type
-- JSON fields use PostgreSQL's `JSONB` type for better performance
-- Foreign keys use `ON DELETE CASCADE` for data integrity
-- The `updated_at` column is automatically updated via database triggers
-- Soft deletes are supported on `users` and `orders` tables via `deleted_at` column
-
