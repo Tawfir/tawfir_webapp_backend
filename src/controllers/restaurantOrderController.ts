@@ -8,6 +8,10 @@ const updateOrderStatusSchema = z.object({
   status: z.enum(['incoming', 'ready', 'completed', 'cancelled']),
 });
 
+const updatePaymentMethodSchema = z.object({
+  payment_method: z.enum(['card', 'cash']),
+});
+
 export class RestaurantOrderController {
   /**
    * @swagger
@@ -223,6 +227,86 @@ export class RestaurantOrderController {
         return;
       }
       error(res, err.message || 'Order status update failed', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/restaurant/orders/{id}/payment-method:
+   *   put:
+   *     summary: Update payment method for an order
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - payment_method
+   *             properties:
+   *               payment_method:
+   *                 type: string
+   *                 enum: [card, cash]
+   *     responses:
+   *       200:
+   *         description: Payment method updated successfully
+   *       404:
+   *         description: Order not found
+   */
+  static async updatePaymentMethod(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || !(req as any).restaurant) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const orderId = parseInt(req.params.id);
+      const validated = updatePaymentMethodSchema.parse(req.body);
+      const restaurant = (req as any).restaurant;
+
+      // Check if order belongs to restaurant
+      const orderResult = await pool.query(
+        'SELECT * FROM orders WHERE id = $1 AND restaurant_id = $2',
+        [orderId, restaurant.id]
+      );
+
+      if (orderResult.rows.length === 0) {
+        error(res, 'Order not found', 404);
+        return;
+      }
+
+      // Update payment method
+      await pool.query(
+        'UPDATE orders SET payment_method = $1, updated_at = NOW() WHERE id = $2',
+        [validated.payment_method, orderId]
+      );
+
+      // Get updated order
+      const updatedOrderResult = await pool.query(
+        `SELECT o.*,
+         json_build_object('id', u.id, 'name', u.name, 'email', u.email) as user
+         FROM orders o
+         JOIN users u ON o.user_id = u.id
+         WHERE o.id = $1`,
+        [orderId]
+      );
+
+      success(res, { order: updatedOrderResult.rows[0] }, 'Payment method updated successfully');
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        error(res, 'Validation error', 400, err.errors);
+        return;
+      }
+      error(res, err.message || 'Payment method update failed', 500);
     }
   }
 

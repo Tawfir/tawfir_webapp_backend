@@ -28,7 +28,9 @@ router.put('/restaurants/:id', uploadFields([
 ]), AdminController.updateRestaurant);
 router.delete('/restaurants/:id', AdminController.deleteRestaurant);
 router.get('/orders', AdminController.getOrders);
-router.get('/withdrawals', AdminController.getWithdrawals);
+router.get('/revenue', AdminController.getRevenueManagement);
+router.post('/revenue/pay-restaurant/:id', AdminController.payRestaurant);
+router.post('/revenue/request-payment/:id', AdminController.requestPaymentFromRestaurant);
 router.get('/categories', AdminController.getCategories);
 router.get('/categories/:id', AdminController.getCategory);
 router.post('/categories', uploadSingle('image'), AdminController.createCategory);

@@ -298,11 +298,18 @@ async function seedDatabase() {
     if (allDishes.length === 0) {
       console.log('   ⚠️  No dishes available, skipping order creation');
     } else {
-      // Create orders: 6 incoming, 4 ready, 12 completed
+      // Create orders for the last 3 days including today
+      // Distribution: Today (most orders), Yesterday, Day before yesterday
       const orderGroups = [
-        { status: 'incoming', count: 6 },
-        { status: 'ready', count: 4 },
-        { status: 'completed', count: 12 },
+        // Today's orders
+        { status: 'incoming', count: 6, dayOffset: 0 },
+        { status: 'ready', count: 4, dayOffset: 0 },
+        { status: 'completed', count: 12, dayOffset: 0 },
+        // Yesterday's orders
+        { status: 'completed', count: 8, dayOffset: 1 },
+        { status: 'cancelled', count: 2, dayOffset: 1 },
+        // Day before yesterday's orders
+        { status: 'completed', count: 6, dayOffset: 2 },
       ];
 
       let orderCount = 0;
@@ -315,21 +322,30 @@ async function seedDatabase() {
             .slice(0, numberOfDishes);
 
           let totalPrice = 0;
-          // Create orders for today with random times throughout the day
+          // Create orders for the specified day with random times throughout the day
           const now = new Date();
           const createdAt = new Date(now);
-          // Set random time between 9 AM and 11 PM today
+          // Subtract days
+          createdAt.setDate(createdAt.getDate() - group.dayOffset);
+          // Set random time between 9 AM and 11 PM
           createdAt.setHours(9 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60), 0, 0);
+
+          // Random payment method (card or cash) for completed orders
+          // For other statuses, set payment_method to null (will be set when order is completed)
+          const paymentMethod = group.status === 'completed' 
+            ? (Math.random() > 0.5 ? 'card' : 'cash')
+            : null;
 
           // Create order
           const orderResult = await client.query(
-            `INSERT INTO orders (user_id, restaurant_id, status, pickup_time, total_price, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            `INSERT INTO orders (user_id, restaurant_id, status, payment_method, pickup_time, total_price, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
              RETURNING id`,
             [
               userId,
               restaurantId,
               group.status,
+              paymentMethod,
               pickupTimes[Math.floor(Math.random() * pickupTimes.length)],
               0, // Will update after
               createdAt,
@@ -371,7 +387,7 @@ async function seedDatabase() {
                 Math.round(totalPrice * 100),
                 'usd',
                 'payment',
-                'cash',
+                paymentMethod || 'cash',
                 'succeeded',
               ]
             );
@@ -402,13 +418,107 @@ async function seedDatabase() {
       console.log(`   ✓ Created ${orderCount} orders`);
     }
 
+    // 6. Create second restaurant with negative balance for testing
+    console.log('\n🏪 Creating second restaurant with negative balance...');
+    const secondRestaurantUserResult = await client.query(
+      `SELECT id FROM users WHERE email = 'restaurant2@example.com'`
+    );
+
+    let secondRestaurantUserId: number;
+    if (secondRestaurantUserResult.rows.length > 0) {
+      secondRestaurantUserId = secondRestaurantUserResult.rows[0].id;
+      console.log(`   ✓ Found existing user for second restaurant (ID: ${secondRestaurantUserId})`);
+    } else {
+      const hashedPassword2 = await bcrypt.hash('password', 10);
+      const newUserResult = await client.query(
+        `INSERT INTO users (name, email, password, type, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         RETURNING id`,
+        ['Second Restaurant Owner', 'restaurant2@example.com', hashedPassword2, 'restaurant']
+      );
+      secondRestaurantUserId = newUserResult.rows[0].id;
+      
+      // Add restaurant role
+      const roleResult2 = await client.query('SELECT id FROM roles WHERE name = $1', ['restaurant']);
+      if (roleResult2.rows.length > 0) {
+        await client.query(
+          'INSERT INTO role_user (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [secondRestaurantUserId, roleResult2.rows[0].id]
+        );
+      }
+      console.log(`   ✓ Created user for second restaurant (ID: ${secondRestaurantUserId})`);
+    }
+
+    const secondRestaurantResult = await client.query(
+      `SELECT id FROM restaurants WHERE user_id = $1`,
+      [secondRestaurantUserId]
+    );
+
+    let secondRestaurantId: number;
+    if (secondRestaurantResult.rows.length > 0) {
+      secondRestaurantId = secondRestaurantResult.rows[0].id;
+      console.log(`   ✓ Found existing second restaurant (ID: ${secondRestaurantId})`);
+    } else {
+      const newRestaurantResult = await client.query(
+        `INSERT INTO restaurants (user_id, name, address, lat, lng, public_phone, private_phone, status, is_featured, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+         RETURNING id`,
+        [
+          secondRestaurantUserId,
+          'Cash Only Restaurant',
+          '456 Test Avenue',
+          24.7500,
+          46.7000,
+          '0511111111',
+          '0561111111',
+          'approved',
+          false,
+        ]
+      );
+      secondRestaurantId = newRestaurantResult.rows[0].id;
+      console.log(`   ✓ Created second restaurant (ID: ${secondRestaurantId})`);
+    }
+
+    // Create orders for second restaurant with cash payments (negative balance)
+    const secondRestaurantOrdersResult = await client.query(
+      `SELECT COUNT(*) as count FROM orders WHERE restaurant_id = $1`,
+      [secondRestaurantId]
+    );
+    const existingSecondOrders = parseInt(secondRestaurantOrdersResult.rows[0].count);
+
+    if (existingSecondOrders === 0) {
+      // Create 5 completed cash orders for negative balance
+      for (let i = 1; i <= 5; i++) {
+        const orderDate = new Date();
+        orderDate.setDate(orderDate.getDate() - i);
+        orderDate.setHours(12 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+
+        await client.query(
+          `INSERT INTO orders (user_id, restaurant_id, total_price, status, payment_method, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $6)`,
+          [
+            userId,
+            secondRestaurantId,
+            100.00,
+            'completed',
+            'cash',
+            orderDate,
+          ]
+        );
+      }
+      console.log(`   ✓ Created 5 cash orders for second restaurant (negative balance)`);
+    } else {
+      console.log(`   ✓ Second restaurant already has ${existingSecondOrders} orders`);
+    }
+
     await client.query('COMMIT');
 
     console.log('\n✅ Database seeding completed successfully!');
     console.log('\n📋 Login Credentials:');
-    console.log('   Admin:     admin@example.com / password');
-    console.log('   User:      user@example.com / password');
-    console.log('   Restaurant: restaurant@example.com / password');
+    console.log('   Admin:              admin@example.com / password');
+    console.log('   User:               user@example.com / password');
+    console.log('   Restaurant:         restaurant@example.com / password');
+    console.log('   Restaurant 2:       restaurant2@example.com / password');
     console.log('\n');
 
   } catch (error) {

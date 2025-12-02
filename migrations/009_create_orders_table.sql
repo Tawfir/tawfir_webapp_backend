@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS orders (
     restaurant_id BIGINT NOT NULL,
     total_price DECIMAL(10, 2) NOT NULL,
     status VARCHAR(255) NOT NULL DEFAULT 'incoming',
+    payment_method VARCHAR(50) CHECK (payment_method IN ('card', 'cash')),
     pickup_time TIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_restaurant_id ON orders(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_method ON orders(payment_method);
 CREATE INDEX IF NOT EXISTS idx_orders_deleted_at ON orders(deleted_at);
 
 -- Create trigger for updated_at

@@ -776,29 +776,196 @@ export class AdminController {
 
   /**
    * @swagger
-   * /api/admin/withdrawals:
+   * /api/admin/revenue:
    *   get:
-   *     summary: Get all withdrawal requests
+   *     summary: Get revenue management data for all restaurants
    *     tags: [Admin]
    *     security:
    *       - bearerAuth: []
    *     responses:
    *       200:
-   *         description: Withdrawal requests retrieved successfully
+   *         description: Revenue data retrieved successfully
    */
-  static async getWithdrawals(req: AuthRequest, res: Response): Promise<void> {
+  static async getRevenueManagement(req: AuthRequest, res: Response): Promise<void> {
     try {
+      // Get all restaurants with their revenue calculations
       const result = await pool.query(
-        `SELECT wr.*,
-         json_build_object('id', r.id, 'name', r.name) as restaurant
-         FROM withdrawal_requests wr
-         JOIN restaurants r ON wr.restaurant_id = r.id
-         ORDER BY wr.created_at DESC`
+        `SELECT 
+          r.id,
+          r.name,
+          r.status,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as card_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as cash_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) as card_amount_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as cash_commission_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) - 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as net_balance
+         FROM restaurants r
+         LEFT JOIN orders o ON r.id = o.restaurant_id
+         GROUP BY r.id, r.name, r.status
+         ORDER BY r.name`
       );
 
-      success(res, { withdrawals: result.rows }, 'Withdrawal requests retrieved successfully');
+      // Get monthly breakdown for each restaurant
+      const restaurantsWithMonthly = await Promise.all(
+        result.rows.map(async (restaurant) => {
+          const monthlyResult = await pool.query(
+            `SELECT 
+              DATE_TRUNC('month', o.created_at) as month,
+              COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as card_revenue,
+              COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as cash_revenue,
+              COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) as card_amount_owed,
+              COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as cash_commission_owed,
+              COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) - 
+              COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as net_balance
+             FROM orders o
+             WHERE o.restaurant_id = $1
+             GROUP BY DATE_TRUNC('month', o.created_at)
+             ORDER BY month DESC
+             LIMIT 12`,
+            [restaurant.id]
+          );
+
+          return {
+            ...restaurant,
+            monthly: monthlyResult.rows
+          };
+        })
+      );
+
+      success(res, { restaurants: restaurantsWithMonthly }, 'Revenue management data retrieved successfully');
     } catch (err: any) {
-      error(res, err.message || 'Failed to retrieve withdrawal requests', 500);
+      error(res, err.message || 'Failed to retrieve revenue management data', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/admin/revenue/pay-restaurant/{id}:
+   *   post:
+   *     summary: Mark payment sent to restaurant (for positive balance)
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     responses:
+   *       200:
+   *         description: Payment marked as sent
+   */
+  static async payRestaurant(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const restaurantId = parseInt(req.params.id);
+      if (isNaN(restaurantId)) {
+        error(res, 'Invalid restaurant ID', 400);
+        return;
+      }
+
+      // Calculate the amount to pay (card revenue * 0.925)
+      const revenueResult = await pool.query(
+        `SELECT 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) as amount_to_pay
+         FROM restaurants r
+         LEFT JOIN orders o ON r.id = o.restaurant_id
+         WHERE r.id = $1
+         GROUP BY r.id`,
+        [restaurantId]
+      );
+
+      if (revenueResult.rows.length === 0) {
+        error(res, 'Restaurant not found', 404);
+        return;
+      }
+
+      const amountToPay = parseFloat(revenueResult.rows[0].amount_to_pay);
+
+      if (amountToPay <= 0) {
+        error(res, 'No payment due to restaurant', 400);
+        return;
+      }
+
+      // TODO: In a real system, you would:
+      // 1. Create a payment record
+      // 2. Mark orders as paid
+      // 3. Integrate with payment gateway
+      // For now, we'll just return success
+
+      success(res, { 
+        restaurant_id: restaurantId, 
+        amount_paid: amountToPay,
+        message: 'Payment processed successfully'
+      }, 'Payment sent to restaurant successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to process payment', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/admin/revenue/request-payment/{id}:
+   *   post:
+   *     summary: Request payment from restaurant (for negative balance)
+   *     tags: [Admin]
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *     responses:
+   *       200:
+   *         description: Payment request created
+   */
+  static async requestPaymentFromRestaurant(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const restaurantId = parseInt(req.params.id);
+      if (isNaN(restaurantId)) {
+        error(res, 'Invalid restaurant ID', 400);
+        return;
+      }
+
+      // Calculate the amount owed (cash revenue * 0.075)
+      const revenueResult = await pool.query(
+        `SELECT 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as amount_owed
+         FROM restaurants r
+         LEFT JOIN orders o ON r.id = o.restaurant_id
+         WHERE r.id = $1
+         GROUP BY r.id`,
+        [restaurantId]
+      );
+
+      if (revenueResult.rows.length === 0) {
+        error(res, 'Restaurant not found', 404);
+        return;
+      }
+
+      const amountOwed = parseFloat(revenueResult.rows[0].amount_owed);
+
+      if (amountOwed <= 0) {
+        error(res, 'No payment due from restaurant', 400);
+        return;
+      }
+
+      // TODO: In a real system, you would:
+      // 1. Create an invoice record
+      // 2. Send notification to restaurant
+      // 3. Track payment status
+      // For now, we'll just return success
+
+      success(res, { 
+        restaurant_id: restaurantId, 
+        amount_owed: amountOwed,
+        message: 'Payment request created successfully'
+      }, 'Payment request sent to restaurant successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to create payment request', 500);
     }
   }
 
@@ -1031,14 +1198,12 @@ export class AdminController {
 
       const category = categoryResult.rows[0];
 
-      // Get dishes in this category
-      const dishesResult = await pool.query(
-        `SELECT d.id, d.name, d.price, d.image, r.name as restaurant_name
+      // Get dish count in this category
+      const dishCountResult = await pool.query(
+        `SELECT COUNT(DISTINCT d.id) as dish_count
         FROM dishes d
         JOIN food_category_dish fcd ON d.id = fcd.dish_id
-        JOIN restaurants r ON d.restaurant_id = r.id
-        WHERE fcd.food_category_id = $1
-        ORDER BY d.name ASC`,
+        WHERE fcd.food_category_id = $1`,
         [categoryId]
       );
 
@@ -1052,10 +1217,8 @@ export class AdminController {
         [categoryId]
       );
 
-      category.dishes = dishesResult.rows;
+      category.dish_count = parseInt(dishCountResult.rows[0]?.dish_count || '0');
       category.restaurants = restaurantsResult.rows;
-      category.dishesCount = dishesResult.rows.length;
-      category.restaurantsCount = restaurantsResult.rows.length;
 
       success(res, { category }, 'Category retrieved successfully');
     } catch (err: any) {

@@ -691,5 +691,89 @@ export class RestaurantController {
       error(res, err.message || 'Failed to delete place picture', 500);
     }
   }
+
+  /**
+   * @swagger
+   * /api/restaurant/revenue:
+   *   get:
+   *     summary: Get revenue management data for the restaurant
+   *     tags: [Restaurants]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Revenue data retrieved successfully
+   */
+  static async getRevenue(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || !(req as any).restaurant) {
+        error(res, 'Unauthorized', 401);
+        return;
+      }
+
+      const restaurant = (req as any).restaurant;
+
+      // Get overall revenue summary
+      const summaryResult = await pool.query(
+        `SELECT 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as card_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as cash_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) as card_amount_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as cash_commission_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) - 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as net_balance,
+          COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as total_revenue
+         FROM orders o
+         WHERE o.restaurant_id = $1`,
+        [restaurant.id]
+      );
+
+      // Get monthly breakdown
+      const monthlyResult = await pool.query(
+        `SELECT 
+          DATE_TRUNC('month', o.created_at) as month,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as card_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price ELSE 0 END), 0) as cash_revenue,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) as card_amount_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as cash_commission_owed,
+          COALESCE(SUM(CASE WHEN o.payment_method = 'card' AND o.status = 'completed' THEN o.total_price * 0.925 ELSE 0 END), 0) - 
+          COALESCE(SUM(CASE WHEN o.payment_method = 'cash' AND o.status = 'completed' THEN o.total_price * 0.075 ELSE 0 END), 0) as net_balance
+         FROM orders o
+         WHERE o.restaurant_id = $1
+         GROUP BY DATE_TRUNC('month', o.created_at)
+         ORDER BY month DESC
+         LIMIT 12`,
+        [restaurant.id]
+      );
+
+      // Get order-level breakdown with net total calculation
+      const ordersResult = await pool.query(
+        `SELECT 
+          o.id,
+          o.total_price,
+          o.payment_method,
+          o.status,
+          o.created_at,
+          CASE 
+            WHEN o.payment_method = 'card' THEN o.total_price * 0.925
+            WHEN o.payment_method = 'cash' THEN o.total_price * 0.925
+            ELSE 0
+          END as net_total
+         FROM orders o
+         WHERE o.restaurant_id = $1 AND o.status = 'completed'
+         ORDER BY o.created_at DESC
+         LIMIT 100`,
+        [restaurant.id]
+      );
+
+      success(res, {
+        summary: summaryResult.rows[0],
+        monthly: monthlyResult.rows,
+        orders: ordersResult.rows
+      }, 'Revenue data retrieved successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to retrieve revenue data', 500);
+    }
+  }
 }
 

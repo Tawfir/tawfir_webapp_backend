@@ -29,10 +29,8 @@ router.delete('/place-pics/:index', RestaurantController.deletePlacePic);
 // Routes below require restaurant approval
 router.use(restaurantApproved);
 
-// Wallet routes (must come before /:id? route)
-router.get('/wallet', RestaurantWalletController.balance);
-router.get('/wallet/transactions', RestaurantWalletController.transactions);
-router.post('/wallet/withdrawals', RestaurantWithdrawalController.store);
+// Revenue management route (must come before /:id? route)
+router.get('/revenue', RestaurantController.getRevenue);
 
 // Dish routes (must come before /:id? route)
 router.get('/dishes', RestaurantDishController.index);
@@ -46,6 +44,7 @@ router.delete('/dishes/:id', RestaurantDishController.destroy);
 router.get('/orders', RestaurantOrderController.index);
 router.get('/orders/:id', RestaurantOrderController.show);
 router.put('/orders/:id/status', express.json(), RestaurantOrderController.updateStatus);
+router.put('/orders/:id/payment-method', express.json(), RestaurantOrderController.updatePaymentMethod);
 router.get('/stats/chart', RestaurantOrderController.getChartData);
 
 // Transaction routes (must come before /:id? route)
