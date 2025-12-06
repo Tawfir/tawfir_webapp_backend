@@ -1,7 +1,8 @@
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { AuthService } from '../services/authService';
 import { success, error } from '../utils/response';
+import { pool } from '../config/database';
 import { z } from 'zod';
 
 const registerSchema = z.object({
@@ -545,6 +546,58 @@ export class AuthController {
       success(res, null, 'Your account and its orders have been deleted.');
     } catch (err: any) {
       error(res, err.message || 'Account deletion failed', 500);
+    }
+  }
+
+  /**
+   * @swagger
+   * /api/auth/metrics:
+   *   get:
+   *     summary: Get platform metrics (public endpoint)
+   *     tags: [Auth]
+   *     responses:
+   *       200:
+   *         description: Platform metrics retrieved successfully
+   */
+  static async getMetrics(req: Request, res: Response): Promise<void> {
+    try {
+      // Calculate metrics from database
+      const [restaurantsResult, usersResult, ordersResult, co2Result] = await Promise.all([
+        // Total approved restaurants
+        pool.query("SELECT COUNT(*) as count FROM restaurants WHERE status = 'approved'"),
+        // Total users (not deleted)
+        pool.query('SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL'),
+        // Total orders processed (not cancelled, not deleted)
+        pool.query("SELECT COUNT(*) as count FROM orders WHERE status != 'cancelled' AND deleted_at IS NULL"),
+        // Total CO2 saved from completed orders
+        pool.query(
+          `SELECT COALESCE(SUM((d.co2_saved * oi.quantity)), 0) as total
+           FROM order_items oi
+           JOIN orders o ON oi.order_id = o.id
+           JOIN dishes d ON oi.dish_id = d.id
+           WHERE o.status = 'completed' AND o.deleted_at IS NULL AND d.co2_saved IS NOT NULL`
+        ),
+      ]);
+
+      const metrics = {
+        total_restaurants: parseInt(restaurantsResult.rows[0]?.count || '0'),
+        total_users: parseInt(usersResult.rows[0]?.count || '0'),
+        orders_processed: parseInt(ordersResult.rows[0]?.count || '0'),
+        co2_saved_kg: parseFloat(co2Result.rows[0]?.total || '0'),
+      };
+
+      // Update metrics in platform_metrics table (always id = 1)
+      await pool.query(
+        `INSERT INTO platform_metrics (id, total_restaurants, total_users, orders_processed, co2_saved_kg, updated_at)
+         VALUES (1, $1, $2, $3, $4, NOW())
+         ON CONFLICT (id) DO UPDATE
+         SET total_restaurants = $1, total_users = $2, orders_processed = $3, co2_saved_kg = $4, updated_at = NOW()`,
+        [metrics.total_restaurants, metrics.total_users, metrics.orders_processed, metrics.co2_saved_kg]
+      );
+
+      success(res, metrics, 'Platform metrics retrieved successfully');
+    } catch (err: any) {
+      error(res, err.message || 'Failed to retrieve platform metrics', 500);
     }
   }
 }

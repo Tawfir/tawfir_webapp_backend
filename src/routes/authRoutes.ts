@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth';
 const router = Router();
 
 // Public routes
+router.get('/metrics', AuthController.getMetrics);
 router.post('/register', AuthController.register);
 router.post('/login', AuthController.login);
 router.post('/request-password-reset-code', AuthController.requestPasswordResetCode);
