@@ -590,15 +590,27 @@ export class RestaurantDishController {
       const dishId = parseInt(req.params.id);
       const restaurant = (req as any).restaurant;
 
-      // Check if dish belongs to restaurant
+      // Get dish to delete image from S3
       const dishResult = await pool.query(
-        'SELECT id FROM dishes WHERE id = $1 AND restaurant_id = $2',
+        'SELECT id, image FROM dishes WHERE id = $1 AND restaurant_id = $2',
         [dishId, restaurant.id]
       );
 
       if (dishResult.rows.length === 0) {
         error(res, 'Dish not found', 404);
         return;
+      }
+
+      const dish = dishResult.rows[0];
+
+      // Delete image from S3 if exists
+      if (dish.image) {
+        try {
+          await deleteFromS3(extractS3Key(dish.image));
+        } catch (s3Err) {
+          console.error('Failed to delete image from S3:', s3Err);
+          // Continue with deletion even if S3 deletion fails
+        }
       }
 
       // Delete dish (cascade will handle related records)

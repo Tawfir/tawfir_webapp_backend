@@ -1,26 +1,58 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import crypto from 'crypto';
 
-// Initialize S3 client
+// Get the region for the current environment
+// Supports: AWS_REGION_UAT, AWS_REGION_DEV, AWS_REGION_PROD, or AWS_REGION
 // Default region is me-central-1 (UAE - Dubai) - optimal for UAE-based operations
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'me-central-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const getRegion = (): string => {
+  const env = process.env.NODE_ENV || 'development';
+  
+  // Check for environment-specific region first
+  if (env === 'production' && process.env.AWS_REGION_PROD) {
+    return process.env.AWS_REGION_PROD;
+  }
+  if (env === 'uat' && process.env.AWS_REGION_UAT) {
+    return process.env.AWS_REGION_UAT;
+  }
+  if (env === 'development' && process.env.AWS_REGION_DEV) {
+    return process.env.AWS_REGION_DEV;
+  }
+  
+  // Fall back to generic AWS_REGION or default
+  return process.env.AWS_REGION || 'me-central-1';
+};
+
+// Get S3 client for the current environment (dynamically created with correct region)
+const getS3Client = (): S3Client => {
+  const region = getRegion();
+  return new S3Client({
+    region,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+  });
+};
 
 // Support environment-specific buckets
-// Format: AWS_S3_BUCKET_NAME_DEV, AWS_S3_BUCKET_NAME_PROD
+// Format: AWS_S3_BUCKET_NAME_UAT, AWS_S3_BUCKET_NAME_DEV, AWS_S3_BUCKET_NAME_PROD
 // Falls back to AWS_S3_BUCKET_NAME if environment-specific not set
 const getBucketName = (): string => {
   const env = process.env.NODE_ENV || 'development';
-  const envBucket = env === 'production' 
-    ? process.env.AWS_S3_BUCKET_NAME_PROD 
-    : process.env.AWS_S3_BUCKET_NAME_DEV;
   
-  return envBucket || process.env.AWS_S3_BUCKET_NAME || '';
+  // Check for environment-specific bucket
+  if (env === 'production' && process.env.AWS_S3_BUCKET_NAME_PROD) {
+    return process.env.AWS_S3_BUCKET_NAME_PROD;
+  }
+  if (env === 'uat' && process.env.AWS_S3_BUCKET_NAME_UAT) {
+    return process.env.AWS_S3_BUCKET_NAME_UAT;
+  }
+  if (env === 'development' && process.env.AWS_S3_BUCKET_NAME_DEV) {
+    return process.env.AWS_S3_BUCKET_NAME_DEV;
+  }
+  
+  // Fall back to generic bucket name
+  return process.env.AWS_S3_BUCKET_NAME || '';
 };
 
 export interface UploadResult {
@@ -63,11 +95,12 @@ export async function uploadToS3(
     // ACL removed - bucket policy should allow public read access
   });
 
+  const s3Client = getS3Client();
   await s3Client.send(command);
 
   // Construct public URL
   // For us-east-1, the URL format is slightly different (no region in URL)
-  const region = process.env.AWS_REGION || 'me-central-1';
+  const region = getRegion();
   const url = region === 'us-east-1'
     ? `https://${bucketName}.s3.amazonaws.com/${key}`
     : `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
@@ -95,6 +128,7 @@ export async function deleteFromS3(key: string): Promise<void> {
     Key: s3Key,
   });
 
+  const s3Client = getS3Client();
   await s3Client.send(command);
 }
 
