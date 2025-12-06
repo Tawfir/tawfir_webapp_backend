@@ -586,12 +586,20 @@ export class AuthController {
         co2_saved_kg: parseFloat(co2Result.rows[0]?.total || '0'),
       };
 
-      // Update metrics in platform_metrics table (always id = 1)
+      // Ensure the row exists first, then update metrics in platform_metrics table (always id = 1)
+      // First, try to insert (will fail silently if exists due to constraint)
       await pool.query(
         `INSERT INTO platform_metrics (id, total_restaurants, total_users, orders_processed, co2_saved_kg, updated_at)
          VALUES (1, $1, $2, $3, $4, NOW())
-         ON CONFLICT (id) DO UPDATE
-         SET total_restaurants = $1, total_users = $2, orders_processed = $3, co2_saved_kg = $4, updated_at = NOW()`,
+         ON CONFLICT (id) DO NOTHING`,
+        [metrics.total_restaurants, metrics.total_users, metrics.orders_processed, metrics.co2_saved_kg]
+      );
+
+      // Then update (this will always work whether row existed or was just created)
+      await pool.query(
+        `UPDATE platform_metrics 
+         SET total_restaurants = $1, total_users = $2, orders_processed = $3, co2_saved_kg = $4, updated_at = NOW()
+         WHERE id = 1`,
         [metrics.total_restaurants, metrics.total_users, metrics.orders_processed, metrics.co2_saved_kg]
       );
 
